@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Gestão de Feedbacks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .seller-card { cursor: pointer; }
+        .notification-card { animation: slideIn 0.5s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .copy-feedback {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #d1fae5;
+            color: #065f46;
+            font-size: 12px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="container mx-auto px-4 md:px-8 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <div class="p-2 bg-blue-100 rounded-full">
+                    <svg class="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                </div>
+                <h1 class="text-xl font-bold text-gray-800">Painel de Gestão de Feedbacks</h1>
+            </div>
+            <div id="session-display" class="text-right">
+                 <p id="session-id-text" class="text-sm text-gray-500">Nenhuma sessão iniciada</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto p-4 md:p-8">
+        <div id="input-section" class="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8">
+            <textarea id="data-input" rows="8" class="w-full border-gray-300 rounded-lg" placeholder="Copie as colunas (com cabeçalho) da sua planilha e cole aqui."></textarea>
+            <button id="process-btn" class="mt-4 w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-opacity disabled:opacity-50" disabled>Aguarde a conexão...</button>
+            <p id="info-message" class="text-center text-sm mt-3 h-5"></p>
+        </div>
+        
+        <div id="new-session-container" class="text-center mb-8 hidden">
+            <button id="new-session-btn" class="bg-white text-blue-600 font-semibold py-2 px-5 rounded-lg border border-blue-600 hover:bg-blue-50 mr-4">Iniciar Nova Sessão</button>
+        </div>
+
+        <div id="dashboard" class="hidden">
+            <section id="notifications-section" class="mb-8 max-w-4xl mx-auto">
+                 <h2 class="text-2xl font-bold text-gray-900 mb-4">Notificações</h2>
+                 <div id="notifications-list" class="space-y-3"><p class="text-gray-500">Nenhuma notificação nova.</p></div>
+            </section>
+            
+            <section class="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-bold text-lg mb-2 text-center">Status da Sessão</h3><div style="height: 200px;"><canvas id="session-status-chart"></canvas></div></div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-bold text-lg mb-2 text-center">Análise de Respostas</h3><div style="height: 200px;"><canvas id="feedback-analysis-chart"></canvas></div></div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border"><h3 class="font-bold text-lg mb-2 text-center">Índice de Reprovação</h3><div style="height: 200px;"><canvas id="rejection-rate-chart"></canvas></div></div>
+            </section>
+
+             <section id="team-tracking-section" class="mb-10">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Acompanhamento da Equipe</h2>
+                <div id="sellers-list" class="bg-white p-4 rounded-2xl shadow-sm border grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                </div>
+            </section>
+            
+            <section id="segment-charts-section" class="mb-10">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Índice de Resposta por Segmento</h2>
+                <div id="segment-charts-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                </div>
+            </section>
+
+            <section id="full-samples-section">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 id="samples-table-title" class="text-2xl font-bold text-gray-900">Visualização Geral de Amostras</h2>
+                    <button id="show-all-btn" class="hidden bg-gray-200 text-gray-700 text-sm font-semibold py-1 px-3 rounded-lg hover:bg-gray-300">Mostrar Todos</button>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Vendedor</th>
+                                <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Pedido</th>
+                                <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Cliente</th>
+                                <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Produto</th>
+                                <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Status Original</th>
+                                <th class="px-4 py-2 text-left font-medium text-gray-500 uppercase">Feedback Final</th>
+                            </tr>
+                        </thead>
+                        <tbody id="full-samples-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+    
+    <div id="segment-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 class="text-2xl font-bold mb-4">Associar Vendedor a Segmento</h3>
+            <p id="segment-modal-seller-name" class="text-gray-600 mb-6"></p>
+            <div>
+                 <select id="segment-select" class="w-full border-gray-300 rounded-lg"></select>
+            </div>
+            <div class="mt-8 flex justify-end space-x-3">
+                <button id="cancel-modal-btn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-5 rounded-lg">Cancelar</button>
+                <button id="confirm-segment-btn" class="bg-blue-600 text-white font-bold py-2 px-5 rounded-lg">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, writeBatch, getDocs, setDoc, getDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAF_TE28Tbp2nakBGTva1yEEbBCqWvRdJQ",
+            authDomain: "feedback-vendedores.firebaseapp.com",
+            projectId: "feedback-vendedores",
+            storageBucket: "feedback-vendedores.firebasestorage.app",
+            messagingSenderId: "650880422749",
+            appId: "1:650880422749:web:54a258964a6ca8db180eb4",
+            measurementId: "G-TG588KDK0C"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        const PENDING_STATUSES = ['EM ANÁLISE', 'AMOSTRA SEM FEEDBACK', 'SEM RETORNO DO CLIENTE', 'AMOSTRA NÃO TESTADA', 'PENDENTE'];
+        const SEGMENTS = ['CÁRNEOS', 'EXPORTACAO', 'FOOD SERVICE', 'LACTEOS', 'NUTRACEUTICOS', 'NUTRICAO ANIMAL', 'PANIFICACAO', 'SMB', 'SORVETES', 'SUPPLY/FIS'];
+        
+        const processBtn = document.getElementById('process-btn');
+        const dataInput = document.getElementById('data-input');
+        const infoMessage = document.getElementById('info-message');
+        const sessionIdText = document.getElementById('session-id-text');
+        const dashboard = document.getElementById('dashboard');
+        const inputSection = document.getElementById('input-section');
+        const newSessionContainer = document.getElementById('new-session-container');
+        const newSessionBtn = document.getElementById('new-session-btn');
+        const segmentModal = document.getElementById('segment-modal');
+        const cancelModalBtn = document.getElementById('cancel-modal-btn');
+        const confirmSegmentBtn = document.getElementById('confirm-segment-btn');
+        const segmentSelect = document.getElementById('segment-select');
+        const segmentModalSellerName = document.getElementById('segment-modal-seller-name');
+        const sellersListContainer = document.getElementById('sellers-list');
+        const notificationsList = document.getElementById('notifications-list');
+        const segmentChartsGrid = document.getElementById('segment-charts-grid');
+        const fullSamplesTbody = document.getElementById('full-samples-tbody');
+        const samplesTableTitle = document.getElementById('samples-table-title');
+        const showAllBtn = document.getElementById('show-all-btn');
+        
+        let unsubscribe = null;
+        let currentSessionId = null;
+        let chartInstances = {};
+        let currentSellerForSegment = null;
+        let sellerConfigsCache = {};
+        
+        const normalizeText = (text = '') => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+        const sanitizeForFirebaseId = (text) => normalizeText(text).replace(/\//g, "-");
+        
+        processBtn.addEventListener('click', () => {
+            const data = dataInput.value.trim();
+            if (data) parseAndProcessData(data);
+        });
+        
+        newSessionBtn.addEventListener('click', () => window.location.reload());
+        cancelModalBtn.addEventListener('click', () => segmentModal.classList.add('hidden'));
+        showAllBtn.addEventListener('click', () => filterSamplesTable(null));
+        
+        confirmSegmentBtn.addEventListener('click', async () => {
+            if (!currentSellerForSegment) return;
+            const sellerId = sanitizeForFirebaseId(currentSellerForSegment);
+            const newSegment = segmentSelect.value;
+            const docRef = doc(db, "vendedorConfig", sellerId);
+            await setDoc(docRef, { segmento: newSegment, originalName: currentSellerForSegment });
+            
+            sellerConfigsCache[sellerId] = newSegment;
+            segmentModal.classList.add('hidden');
+            
+            if (currentSessionId) listenForUpdates(currentSessionId);
+        });
+
+        function fallbackCopyTextToClipboard(text, button) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    const originalContent = button.innerHTML;
+                    const originalTitle = button.title;
+                    button.innerHTML = `<span class="copy-feedback">Copiado!</span>`;
+                    button.title = "";
+                    setTimeout(() => {
+                        button.innerHTML = originalContent;
+                        button.title = originalTitle;
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            document.body.removeChild(textArea);
+        }
+        
+        function parseAndProcessData(data) {
+            infoMessage.textContent = "A processar...";
+            processBtn.disabled = true;
+
+            Papa.parse(data, {
+                header: true,
+                skipEmptyLines: true,
+                transformHeader: h => h.trim(),
+                complete: (results) => {
+                    if (results.errors.length > 0) {
+                        infoMessage.textContent = `Erro de formatação: ${results.errors[0].message}`;
+                        processBtn.disabled = false;
+                        return;
+                    }
+
+                    const sessionId = `sessao_${Date.now()}`;
+                    const allSamplesData = results.data.map((row, index) => {
+                         const sellerName = row['Vendedor(a)'];
+                         if (!sellerName || !row['Pedido']) return null;
+                         const normalizedStatus = normalizeText(row['Status']);
+                         return {
+                             id: `${sessionId}_${index}`,
+                             sellerName: String(sellerName), isPending: PENDING_STATUSES.includes(normalizedStatus),
+                             pedido: String(row['Pedido'] || ''), razaoSocial: String(row['Razão Social'] || ''),
+                             produto: String(row['Produto'] || ''), descricao: String(row['Descrição'] || ''),
+                             qtde: String(row['Qtde.'] || ''), notaFiscal: String(row['Nota Fiscal'] || ''),
+                             emissaoNF: String(row['Emissão NF'] || ''), originalStatus: String(row['Status'] || ''),
+                             feedback: '', observation: '', finalizedByVendor: false, systemStatus: 'awaiting', editedAfterCompletion: false
+                         };
+                    }).filter(Boolean);
+                    
+                    if (allSamplesData.length === 0) {
+                        infoMessage.textContent = "Nenhum dado válido encontrado para processar.";
+                        processBtn.disabled = false;
+                        return;
+                    }
+
+                    infoMessage.textContent = "Painel gerado. A guardar na nuvem...";
+                    inputSection.classList.add('hidden');
+                    newSessionContainer.classList.remove('hidden');
+                    sessionIdText.innerHTML = `Sessão: <strong>${sessionId}</strong>`;
+                    
+                    processAndDisplayDashboard(allSamplesData, sellerConfigsCache);
+                    saveDataAndListen(allSamplesData, sessionId);
+                }
+            });
+        }
+
+        async function saveDataAndListen(samples, sessionId) {
+            const sellersData = samples.reduce((acc, sample) => {
+                const sellerName = sample.sellerName;
+                if (!acc[sellerName]) {
+                    acc[sellerName] = {
+                        originalName: sellerName,
+                        accessCode: Math.floor(100000 + Math.random() * 900000).toString(),
+                        amostras: []
+                    };
+                }
+                acc[sellerName].amostras.push(sample);
+                return acc;
+            }, {});
+
+            listenForUpdates(sessionId);
+            
+            try {
+                const sellerNames = Object.keys(sellersData);
+                const chunkSize = 20; // Reduzido para evitar exceder a quota
+                for (let i = 0; i < sellerNames.length; i += chunkSize) {
+                    const chunk = sellerNames.slice(i, i + chunkSize);
+                    const batch = writeBatch(db);
+                    chunk.forEach(sellerName => {
+                        const sellerId = sanitizeForFirebaseId(sellerName);
+                        const docRef = doc(db, "sessoes", sessionId, "vendedores", sellerId);
+                        batch.set(docRef, sellersData[sellerName]);
+                    });
+                    infoMessage.textContent = `A guardar... (Lote ${Math.ceil((i+chunk.length)/chunkSize)} de ${Math.ceil(sellerNames.length / chunkSize)})`;
+                    await batch.commit();
+                    // Adiciona uma pausa para evitar exceder a quota de escrita
+                    if (i + chunkSize < sellerNames.length) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+
+                infoMessage.textContent = "Guardado com sucesso! Sincronização em tempo real ativa.";
+
+            } catch (error) {
+                infoMessage.textContent = `Erro ao guardar na nuvem: ${error.message}.`;
+                console.error("Erro Firebase:", error);
+            }
+        }
+
+        async function fetchAllSellerConfigs() {
+            sellerConfigsCache = {};
+            const q = query(collection(db, "vendedorConfig"));
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => {
+                sellerConfigsCache[doc.id] = doc.data().segmento;
+            });
+        }
+
+        function listenForUpdates(sessionId) {
+            currentSessionId = sessionId;
+            const q = query(collection(db, "sessoes", sessionId, "vendedores"));
+            if(unsubscribe) unsubscribe();
+            
+            let initialLoad = true;
+            unsubscribe = onSnapshot(q, async (snapshot) => {
+                let allSamples = [];
+                let sellersInfo = {};
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    allSamples.push(...data.amostras);
+                    sellersInfo[data.originalName] = data;
+                });
+                
+                processAndDisplayDashboard(allSamples, sellerConfigsCache, sellersInfo);
+
+                if(!initialLoad) {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "modified") {
+                           const newData = change.doc.data();
+                           const oldData = allSamples.filter(s => s.sellerName === newData.originalName);
+
+                           const finalizedOrders = new Set();
+                           newData.amostras.forEach(newSample => {
+                               if (newSample.finalizedByVendor) {
+                                   const oldSample = oldData.find(s => s.id === newSample.id);
+                                   if (oldSample && !oldSample.finalizedByVendor) {
+                                       finalizedOrders.add(newSample.pedido);
+                                   }
+                               }
+                           });
+                           
+                           finalizedOrders.forEach(pedido => {
+                                showNotification(`<strong>${newData.originalName}</strong> finalizou os feedbacks do pedido <strong>${pedido}</strong>.`, 'purple');
+                           });
+                        }
+                    });
+                }
+                initialLoad = false;
+            });
+        }
+        
+        function processAndDisplayDashboard(samples, sellerConfigs, sellersInfo = {}) {
+            dashboard.classList.remove('hidden');
+            renderCharts(samples);
+            renderSegmentCharts(samples, sellerConfigs)
+            renderSellersList(samples, sellerConfigs, sellersInfo);
+            renderFullSamplesTable(samples);
+            const currentFilter = samplesTableTitle.textContent.replace('Amostras de ', '');
+            if(currentFilter !== 'Visualização Geral de Amostras') {
+                filterSamplesTable(currentFilter);
+            } else {
+                filterSamplesTable(null);
+            }
+        }
+
+        function renderCharts(samples) {
+            let pending = 0, resolved = 0, approved = 0, rejected = 0;
+            const feedbackCounts = {};
+            samples.forEach(s => {
+                if (s.isPending && !s.finalizedByVendor) { 
+                    pending++; 
+                } else {
+                    resolved++;
+                    if (s.feedback) {
+                        const feedbackKey = s.feedback || 'N/A';
+                        feedbackCounts[feedbackKey] = (feedbackCounts[feedbackKey] || 0) + 1;
+                        if (['PRODUTO DESCONTINUADO', 'FORA DO PERFIL DO CLIENTE', 'FRACA / ESTOURANDO / COM CHUVEIRO', 'QUANTIDADE INSUFICIENTE'].includes(feedbackKey)) {
+                            rejected++;
+                        } else {
+                            approved++;
+                        }
+                    }
+                }
+            });
+            renderChart('session-status-chart', 'doughnut', { labels: ['Pendentes', 'Resolvidos'], datasets: [{ data: [pending, resolved], backgroundColor: ['#facc15', '#3b82f6'] }] });
+            const feedbackLabels = Object.keys(feedbackCounts);
+            const feedbackData = Object.values(feedbackCounts);
+            if(feedbackLabels.length > 0) {
+                renderChart('feedback-analysis-chart', 'bar', { labels: feedbackLabels, datasets: [{ label: 'Quantidade', data: feedbackData, backgroundColor: '#60a5fa' }] }, { indexAxis: 'y', plugins: { legend: { display: false } } });
+            } else {
+                 renderChart('feedback-analysis-chart', 'bar', { labels: ['Aguardando Respostas'], datasets: [{ data: [1], backgroundColor: ['#e5e7eb'] }] }, { indexAxis: 'y', plugins: { legend: { display: false } } });
+            }
+            if (approved === 0 && rejected === 0) {
+                renderChart('rejection-rate-chart', 'doughnut', { labels: ['Aguardando Respostas'], datasets: [{ data: [1], backgroundColor: ['#e5e7eb'] }] });
+            } else {
+                renderChart('rejection-rate-chart', 'doughnut', { labels: ['Aprovadas', 'Reprovadas'], datasets: [{ data: [approved, rejected], backgroundColor: ['#34d399', '#f87171'] }] });
+            }
+        }
+
+        function renderChart(canvasId, type, data, options = {}) {
+            if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            chartInstances[canvasId] = new Chart(ctx, { type, data, options: { responsive: true, maintainAspectRatio: false, ...options } });
+        }
+
+        function renderSellersList(samples, sellerConfigs, sellersInfo) {
+            sellersListContainer.innerHTML = '';
+            const sellers = {};
+            samples.forEach(s => {
+                if (!sellers[s.sellerName]) sellers[s.sellerName] = { samples: [], systemStatus: 'awaiting' };
+                sellers[s.sellerName].samples.push(s);
+                if(s.systemStatus === 'baixado') sellers[s.sellerName].systemStatus = 'baixado';
+            });
+
+            Object.keys(sellers).sort().forEach(sellerName => {
+                const seller = sellers[sellerName];
+                const sellerId = sanitizeForFirebaseId(sellerName);
+                const accessCode = sellersInfo[sellerName]?.accessCode || 'A gerar...';
+                const totalPending = seller.samples.filter(s => s.isPending && !s.finalizedByVendor).length;
+                const isFinalized = totalPending === 0;
+                let statusColor = 'yellow';
+                if (isFinalized) statusColor = 'purple';
+
+                const card = document.createElement('div');
+                card.className = `seller-card p-4 rounded-lg shadow border-l-4 border-${statusColor}-500 ${seller.systemStatus === 'baixado' ? 'bg-gray-200' : 'bg-white'}`;
+                card.dataset.sellerName = sellerName;
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <p class="font-bold text-lg">${sellerName}</p>
+                            <button class="copy-name-btn text-gray-400 hover:text-blue-500" title="Copiar Nome do Vendedor" data-seller-name="${sellerName}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                        <button class="config-seller-btn text-gray-400 hover:text-gray-600" data-seller-name="${sellerName}">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a1 1 0 00-2 0v2.28a1 1 0 00.9 1.42A7.48 7.48 0 0110 8a7.48 7.48 0 015.1 2.7.999.999 0 00.9-1.42V4a1 1 0 10-2 0v1.588A5.502 5.502 0 0010 5.03 5.502 5.502 0 005 5.588V4zM10 12a2 2 0 100 4 2 2 0 000-4z"></path></svg>
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-600 font-semibold">${sellerConfigs[sellerId] || 'Sem Segmento'}</p>
+                    <div class="mt-4 flex items-center justify-between">
+                         <span class="text-xs text-gray-500">${isFinalized ? 'Finalizado' : `${totalPending} pendente(s)`}</span>
+                         <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold">${accessCode}</span>
+                            <button class="copy-code-btn text-gray-400 hover:text-blue-500" title="Copiar Código de Acesso" data-access-code="${accessCode}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                    </div>`;
+                
+                card.addEventListener('click', (e) => { if(!e.target.closest('button')) filterSamplesTable(sellerName); });
+                sellersListContainer.appendChild(card);
+            });
+
+            document.querySelectorAll('.copy-name-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    fallbackCopyTextToClipboard(e.currentTarget.dataset.sellerName, e.currentTarget);
+                };
+            });
+            document.querySelectorAll('.copy-code-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const code = e.currentTarget.dataset.accessCode;
+                    if (code && code !== 'A gerar...') {
+                       fallbackCopyTextToClipboard(code, e.currentTarget);
+                    }
+                };
+            });
+             document.querySelectorAll('.config-seller-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openSegmentModal(e.currentTarget.dataset.sellerName);
+                });
+            });
+        }
+        
+        function renderFullSamplesTable(samples) {
+            fullSamplesTbody.innerHTML = '';
+            samples.sort((a,b) => a.sellerName.localeCompare(b.sellerName) || a.pedido.localeCompare(b.pedido)).forEach(sample => {
+                let feedbackDisplay = '<span class="text-gray-400">Pendente</span>';
+                if (!sample.isPending || sample.finalizedByVendor) {
+                    feedbackDisplay = `<span class="font-semibold">${sample.feedback || 'N/A'}</span><p class="text-xs text-gray-500">${sample.observation || ''}</p>`;
+                }
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.dataset.sellerName = sample.sellerName;
+                row.innerHTML = `
+                    <td class="px-4 py-2 font-medium">${sample.sellerName}</td> <td class="px-4 py-2">${sample.pedido}</td>
+                    <td class="px-4 py-2">${sample.razaoSocial}</td> <td class="px-4 py-2">${sample.produto}</td>
+                    <td class="px-4 py-2">${sample.originalStatus}</td> <td class="px-4 py-2">${feedbackDisplay}</td>`;
+                fullSamplesTbody.appendChild(row);
+            });
+        }
+
+        function filterSamplesTable(sellerName) {
+            const rows = fullSamplesTbody.querySelectorAll('tr');
+            rows.forEach(row => { row.style.display = (!sellerName || row.dataset.sellerName === sellerName) ? '' : 'none'; });
+            if(sellerName) {
+                samplesTableTitle.textContent = `Amostras de ${sellerName}`;
+                showAllBtn.classList.remove('hidden');
+            } else {
+                samplesTableTitle.textContent = 'Visualização Geral de Amostras';
+                showAllBtn.classList.add('hidden');
+            }
+        }
+
+        function showNotification(message, color) {
+            if(notificationsList.querySelector('p')) notificationsList.innerHTML = '';
+            const card = document.createElement('div');
+            card.className = `notification-card bg-white p-3 rounded-lg shadow-sm border-l-4 border-${color}-500 flex justify-between items-center`;
+            card.innerHTML = `<p class="text-sm">${message}</p><button class="text-gray-400 hover:text-gray-600">&times;</button>`;
+            card.querySelector('button').onclick = () => card.remove();
+            notificationsList.prepend(card);
+        }
+        
+        async function openSegmentModal(sellerName) {
+            currentSellerForSegment = sellerName;
+            const sellerId = sanitizeForFirebaseId(sellerName);
+            segmentModal.classList.remove('hidden');
+            segmentModalSellerName.textContent = `Definir segmento para: ${sellerName}`;
+
+            const currentSegment = sellerConfigsCache[sellerId] || "";
+
+            segmentSelect.innerHTML = `<option value="">Selecione...</option>` + SEGMENTS.map(s => `<option value="${s}" ${currentSegment === s ? 'selected' : ''}>${s}</option>`).join('');
+        }
+        
+        function renderSegmentCharts(samples, sellerConfigs) {
+            segmentChartsGrid.innerHTML = '';
+            const samplesBySegment = {};
+            samples.forEach(sample => {
+                const sellerId = sanitizeForFirebaseId(sample.sellerName);
+                const segment = sellerConfigs[sellerId];
+                if (segment && (!sample.isPending || sample.finalizedByVendor) && sample.feedback) {
+                    if (!samplesBySegment[segment]) samplesBySegment[segment] = {};
+                    const feedback = sample.feedback;
+                    samplesBySegment[segment][feedback] = (samplesBySegment[segment][feedback] || 0) + 1;
+                }
+            });
+
+            Object.keys(samplesBySegment).sort().forEach(segment => {
+                const chartId = `segment-chart-${segment.replace(/\s+/g, '-')}`;
+                const card = document.createElement('div');
+                card.className = 'bg-white p-6 rounded-2xl shadow-sm border';
+                card.innerHTML = `<h3 class="font-bold text-lg mb-2 text-center">${segment}</h3><div style="height: 200px;"><canvas id="${chartId}"></canvas></div>`;
+                segmentChartsGrid.appendChild(card);
+                
+                const labels = Object.keys(samplesBySegment[segment]);
+                const data = Object.values(samplesBySegment[segment]);
+                renderChart(chartId, 'bar', { labels, datasets: [{ data, backgroundColor: '#a78bfa' }] }, { indexAxis: 'y', plugins: { legend: { display: false } } });
+            });
+        }
+
+        (async () => {
+            try {
+                await signInAnonymously(auth);
+                await fetchAllSellerConfigs();
+                processBtn.disabled = false;
+                processBtn.textContent = 'Gerar Painel';
+                infoMessage.textContent = 'Conectado. Pronto para receber os dados.';
+            } catch(error) {
+                infoMessage.textContent = "Não foi possível conectar ao serviço.";
+            }
+        })();
+    </script>
+</body>
+</html>
+
